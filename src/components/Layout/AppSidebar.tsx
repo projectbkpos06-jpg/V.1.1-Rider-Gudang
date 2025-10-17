@@ -29,7 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import { toast } from "sonner";
 
-const adminMenuItems = [
+export const adminMenuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Produk", url: "/products", icon: Package },
   { title: "Gudang", url: "/warehouse", icon: Warehouse },
@@ -39,7 +39,7 @@ const adminMenuItems = [
   { title: "Pengaturan", url: "/settings", icon: Settings },
 ];
 
-const riderMenuItems = [
+export const riderMenuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "POS", url: "/pos", icon: ShoppingCart },
   { title: "Produk Saya", url: "/my-inventory", icon: Package },

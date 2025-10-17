@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/Layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +34,7 @@ export default function Products() {
   const [open, setOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
+  const { isMobile } = useIsMobile();
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products'],
@@ -159,7 +162,7 @@ export default function Products() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Produk</h1>
+            <h1 className={cn("font-bold", isMobile ? "text-2xl" : "text-3xl")}>Produk</h1>
             <p className="text-muted-foreground">Kelola semua produk di sistem</p>
           </div>
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingProduct(null); }}>
@@ -281,6 +284,45 @@ export default function Products() {
           <CardContent>
             {isLoading ? (
               <p>Loading...</p>
+            ) : isMobile ? (
+              <div className="grid grid-cols-1 gap-4">
+                {products?.map((product) => (
+                  <Card key={product.id}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center justify-between">
+                        <div>
+                          <span className="font-mono text-sm text-muted-foreground">{product.sku}</span>
+                          <h3 className="text-lg">{product.name}</h3>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => { setEditingProduct(product); setOpen(true); }}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate(product.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Kategori</span>
+                          <span>{product.categories?.name || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Harga Modal</span>
+                          <span>Rp {Number(product.cost).toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Harga Jual</span>
+                          <span>Rp {Number(product.price).toLocaleString('id-ID')}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             ) : (
               <Table>
                 <TableHeader>

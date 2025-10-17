@@ -65,6 +65,7 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signUp(email: string, password: string, fullName: string) {
+  // Sign up the user
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -75,6 +76,27 @@ export async function signUp(email: string, password: string, fullName: string) 
       emailRedirectTo: `${window.location.origin}/`,
     },
   });
+
+  if (error) return { data, error };
+
+  if (data.user) {
+    // Create or update profile with role
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: data.user.id,
+        full_name: fullName,
+        role: 'rider', // Set default role to rider
+        email: email,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (profileError) {
+      console.error('Error creating profile:', profileError);
+      return { data, error: profileError };
+    }
+  }
+
   return { data, error };
 }
 

@@ -77,11 +77,14 @@ export async function fetchTransactionHistory(filters: ReportFilters): Promise<T
 export async function fetchRidersList() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name')
-    .eq('role', 'rider');
+    .select('id, full_name, role')
+    .or('role.eq.rider,role.is.null'); // Get both confirmed riders and new users
 
   if (error) throw error;
-  return data;
+  
+  // Filter out non-riders if needed
+  const riders = data?.filter(user => !user.role || user.role === 'rider') || [];
+  return riders;
 }
 
 export async function generateReport(filters: ReportFilters) {

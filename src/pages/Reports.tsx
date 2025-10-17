@@ -13,6 +13,9 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { useState } from "react";
+import { generateSalesReport } from "@/lib/excel";
+import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { fetchTransactionHistory, fetchRidersList } from "@/lib/reports";
 
 export default function Reports() {
@@ -136,57 +139,81 @@ export default function Reports() {
           </TabsList>
 
           <div className="flex items-center gap-4">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "justify-start text-left font-normal w-[300px]",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarDays className="mr-2 h-4 w-4" />
-                  {date?.from ? (
-                    date.to ? (
-                      <>
-                        {format(date.from, "dd LLL, y")} -{" "}
-                        {format(date.to, "dd LLL, y")}
-                      </>
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal w-[300px]",
+                      !date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    {date?.from ? (
+                      date.to ? (
+                        <>
+                          {format(date.from, "dd LLL, y")} -{" "}
+                          {format(date.to, "dd LLL, y")}
+                        </>
+                      ) : (
+                        format(date.from, "dd LLL, y")
+                      )
                     ) : (
-                      format(date.from, "dd LLL, y")
-                    )
-                  ) : (
-                    <span>Pilih tanggal</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={date?.from}
-                  selected={date}
-                  onSelect={setDate}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
+                      <span>Pilih tanggal</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={date?.from}
+                    selected={date}
+                    onSelect={setDate}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+              
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!transactionHistory?.length) {
+                    toast.error("Tidak ada data transaksi untuk diexport");
+                    return;
+                  }
+                  
+                  try {
+                    const selectedRiderData = selectedRider === 'all' 
+                      ? undefined 
+                      : riders?.find(r => r.id === selectedRider);
+                    generateSalesReport(transactionHistory, selectedRiderData);
+                    toast.success("Laporan berhasil di-download");
+                  } catch (error) {
+                    console.error('Error generating report:', error);
+                    toast.error("Gagal men-download laporan");
+                  }
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Download Laporan
+              </Button>
+            </div>
 
             <Select
               value={selectedRider}
               onValueChange={setSelectedRider}
             >
               <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Pilih rider">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>
-                      {selectedRider
-                        ? riders?.find((r) => r.id === selectedRider)?.full_name
-                        : "Semua Rider"}
-                    </span>
-                  </div>
-                </SelectValue>
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  <span>
+                    {selectedRider === 'all' 
+                      ? "Semua Rider"
+                      : riders?.find((r) => r.id === selectedRider)?.full_name || "Pilih Rider"}
+                  </span>
+                </div>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Rider</SelectItem>
