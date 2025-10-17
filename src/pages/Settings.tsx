@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Users } from "lucide-react";
+import { Settings, Users, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -21,8 +22,24 @@ interface SelectedRoles {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, signOut } = useAuth();
   const [selectedRoles, setSelectedRoles] = useState<SelectedRoles>({});
+  const navigate = useNavigate();
+
+  // Profile query
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  });
 
   // Tax settings query
   const { data: taxSettings } = useQuery({
@@ -100,16 +117,60 @@ export default function SettingsPage() {
     updateTaxMutation.mutate(tax);
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/auth');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      toast.error('Gagal keluar dari sistem');
+    }
+  };
+
+  const renderProfileSection = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Profil Saya
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-2">
+          <Label>Email</Label>
+          <Input value={profile?.email || '-'} disabled />
+        </div>
+        <div className="grid gap-2">
+          <Label>Nama Lengkap</Label>
+          <Input value={profile?.full_name || '-'} disabled />
+        </div>
+        <div className="grid gap-2">
+          <Label>Role</Label>
+          <Input value={profile?.role || '-'} disabled />
+        </div>
+        {!isAdmin && (
+          <Button
+            variant="destructive"
+            className="w-full mt-4 flex items-center gap-2"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Keluar dari Sistem
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   if (!isAdmin) {
     return (
       <AppLayout>
-        <div className="p-4">
-          <div className="rounded-lg bg-red-50 p-4">
-            <h3 className="text-lg font-medium text-red-800">Akses Terbatas</h3>
-            <p className="mt-2 text-sm text-red-700">
-              Anda tidak memiliki akses ke halaman pengaturan.
-            </p>
+        <div className="space-y-6 p-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Pengaturan</h1>
+            <p className="text-muted-foreground">Kelola profil dan pengaturan</p>
           </div>
+          {renderProfileSection()}
         </div>
       </AppLayout>
     );
@@ -125,9 +186,14 @@ export default function SettingsPage() {
 
         <Tabs defaultValue="tax" className="space-y-4">
           <TabsList className="w-full flex">
+            <TabsTrigger value="profile" className="flex-1">Profil</TabsTrigger>
             <TabsTrigger value="tax" className="flex-1">Pengaturan Pajak</TabsTrigger>
             <TabsTrigger value="users" className="flex-1">Manajemen Pengguna</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="profile">
+            {renderProfileSection()}
+          </TabsContent>
 
           <TabsContent value="tax">
             <Card>

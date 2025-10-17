@@ -10,6 +10,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,8 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAdmin = profile?.role === "admin";
 
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // Redirect will be handled by the onAuthStateChange listener
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, isAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );

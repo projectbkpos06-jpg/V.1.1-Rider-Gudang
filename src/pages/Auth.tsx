@@ -179,11 +179,15 @@ export default function Auth() {
       <Card className="w-full max-w-md shadow-2xl border-primary/20">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-primary p-3">
-              <Package className="h-8 w-8 text-primary-foreground" />
-            </div>
+          <div className="p-3">
+              <img 
+                src="/images/logo.png" 
+                alt="Company Logo"
+                className="h-16 w-16 object-contain"
+              />
           </div>
-          <CardTitle className="text-3xl font-bold">Sistem POS Warehouse</CardTitle>
+          </div>
+          <CardTitle className="text-3xl font-bold">BK Storage & Rider</CardTitle>
           <CardDescription>
             Kelola stok, distribusi, dan penjualan dengan mudah
           </CardDescription>
