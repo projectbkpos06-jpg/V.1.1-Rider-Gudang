@@ -1,16 +1,180 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Package, Plus, Pencil, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function Products() {
+  const [open, setOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const queryClient = useQueryClient();
+
+  const { data: products, isLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, categories(name)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (product: any) => {
+      const { error } = await supabase.from('products').insert(product);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success("Produk berhasil ditambahkan");
+      setOpen(false);
+    },
+    onError: () => toast.error("Gagal menambahkan produk")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...product }: any) => {
+      const { error } = await supabase.from('products').update(product).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success("Produk berhasil diupdate");
+      setOpen(false);
+      setEditingProduct(null);
+    },
+    onError: () => toast.error("Gagal mengupdate produk")
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success("Produk berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus produk")
+  });
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const product = {
+      name: formData.get('name'),
+      sku: formData.get('sku'),
+      description: formData.get('description'),
+      category_id: formData.get('category_id') || null,
+      price: parseFloat(formData.get('price') as string),
+      cost: parseFloat(formData.get('cost') as string),
+      image_url: formData.get('image_url') || null,
+    };
+
+    if (editingProduct) {
+      updateMutation.mutate({ id: editingProduct.id, ...product });
+    } else {
+      createMutation.mutate(product);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Produk</h1>
-          <p className="text-muted-foreground">
-            Kelola semua produk di sistem
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Produk</h1>
+            <p className="text-muted-foreground">Kelola semua produk di sistem</p>
+          </div>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingProduct(null); }}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Tambah Produk
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nama Produk</Label>
+                    <Input id="name" name="name" defaultValue={editingProduct?.name} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sku">SKU</Label>
+                    <Input id="sku" name="sku" defaultValue={editingProduct?.sku} required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Deskripsi</Label>
+                  <Textarea id="description" name="description" defaultValue={editingProduct?.description} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category_id">Kategori</Label>
+                    <Select name="category_id" defaultValue={editingProduct?.category_id}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih kategori" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories?.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="image_url">URL Gambar</Label>
+                    <Input id="image_url" name="image_url" defaultValue={editingProduct?.image_url} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cost">Harga Modal</Label>
+                    <Input id="cost" name="cost" type="number" step="0.01" defaultValue={editingProduct?.cost} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Harga Jual</Label>
+                    <Input id="price" name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditingProduct(null); }}>
+                    Batal
+                  </Button>
+                  <Button type="submit">
+                    {editingProduct ? 'Update' : 'Tambah'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>
@@ -21,7 +185,43 @@ export default function Products() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">Konten halaman produk akan ditampilkan di sini</p>
+            {isLoading ? (
+              <p>Loading...</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Nama</TableHead>
+                    <TableHead>Kategori</TableHead>
+                    <TableHead>Harga Modal</TableHead>
+                    <TableHead>Harga Jual</TableHead>
+                    <TableHead>Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products?.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-mono">{product.sku}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>{product.categories?.name || '-'}</TableCell>
+                      <TableCell>Rp {Number(product.cost).toLocaleString('id-ID')}</TableCell>
+                      <TableCell>Rp {Number(product.price).toLocaleString('id-ID')}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => { setEditingProduct(product); setOpen(true); }}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate(product.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
