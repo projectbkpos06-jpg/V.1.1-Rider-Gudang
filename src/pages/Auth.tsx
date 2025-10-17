@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { signIn, signUp } from "@/lib/auth";
+import { signIn, signUp, resetPassword, resendVerificationEmail } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
-import { Package, LogIn, UserPlus } from "lucide-react";
+import { Package, LogIn, UserPlus, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -18,12 +18,15 @@ export default function Auth() {
   // Login form
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   
   // Signup form
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupFullName, setSignupFullName] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -31,28 +34,100 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!loginEmail) {
+      toast.error("Mohon masukkan email Anda terlebih dahulu");
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
-      const { data, error } = await signIn(loginEmail, loginPassword);
+      const { error } = await resetPassword(loginEmail);
 
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          toast.error("Email atau password salah");
-        } else {
-          toast.error(error.message);
+        console.error("Reset password error:", error);
+        toast.error(`Gagal mengirim email reset password: ${error.message}`);
+        return;
+      }
+
+      toast.success("Email reset password telah dikirim! Silakan cek email Anda.");
+      setLoginEmail("");
+    } catch (error) {
+      console.error("Reset password error:", error);
+      if (error instanceof Error) {
+        toast.error(`Terjadi kesalahan: ${error.message}`);
+      } else {
+        toast.error("Terjadi kesalahan saat mengirim email reset password");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async (email: string) => {
+    try {
+      const { error } = await resendVerificationEmail(email);
+      if (error) {
+        toast.error("Gagal mengirim ulang email verifikasi");
+        return;
+      }
+      toast.success("Email verifikasi telah dikirim ulang. Silakan cek email Anda.");
+    } catch (error) {
+      toast.error("Terjadi kesalahan saat mengirim ulang email verifikasi");
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!loginEmail || !loginPassword) {
+      toast.error("Email dan password harus diisi");
+      return;
+    }
+    
+    setIsLoading(true);
+
+    try {
+      console.log('Starting login process...');
+      const { data, error, needsVerification } = await signIn(loginEmail, loginPassword);
+
+      if (error) {
+        console.error('Login error:', error);
+        toast.error(error.message);
+        
+        if (needsVerification) {
+          toast.info(
+            <div>
+              <p>Kirim ulang email verifikasi?</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2"
+                onClick={() => handleResendVerification(loginEmail)}
+              >
+                Kirim Ulang
+              </Button>
+            </div>
+          );
         }
         return;
       }
 
-      if (data.user) {
-        toast.success("Berhasil login!");
-        navigate("/dashboard");
+      if (!data?.user) {
+        console.error('No user data returned');
+        toast.error("Gagal mendapatkan data user");
+        return;
       }
+
+      console.log('Login successful:', data.user);
+      toast.success("Berhasil login!");
+      navigate("/dashboard");
     } catch (error) {
-      toast.error("Terjadi kesalahan saat login");
+      console.error('Unexpected error:', error);
+      toast.error(error instanceof Error ? error.message : "Terjadi kesalahan saat login");
     } finally {
       setIsLoading(false);
     }
@@ -142,18 +217,42 @@ export default function Auth() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Password</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="login-password"
+                      type={showLoginPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    >
+                      {showLoginPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full mb-2" disabled={isLoading}>
                   {isLoading ? "Memproses..." : "Login"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full text-sm text-muted-foreground hover:text-primary"
+                  disabled={isLoading}
+                  onClick={(e) => handleResetPassword(e)}
+                >
+                  Lupa Password?
                 </Button>
               </form>
             </TabsContent>
@@ -186,27 +285,57 @@ export default function Auth() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signup-password"
+                      type={showSignupPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                    >
+                      {showSignupPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-confirm-password">Konfirmasi Password</Label>
-                  <Input
-                    id="signup-confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signup-confirm-password"
+                      type={showSignupConfirmPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={signupConfirmPassword}
+                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
+                    >
+                      {showSignupConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Memproses..." : "Daftar sebagai Rider"}

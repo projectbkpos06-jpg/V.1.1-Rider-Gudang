@@ -1,0 +1,2 @@
+ALTER TABLE distributions 
+ADD COLUMN IF NOT EXISTS distributed_at TIMESTAMP WITH TIME ZONE;

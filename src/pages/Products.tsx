@@ -13,20 +13,42 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  description?: string;
+  cost: number;
+  price: number;
+  stock: number;
+  image_url?: string;
+  category_id?: string;
+  categories?: {
+    name: string;
+  };
+}
+
 export default function Products() {
   const [open, setOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: productsData, error } = await supabase
         .from('products')
         .select('*, categories(name)')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      
+      // Transform data to include stock with default value 0
+      const productsWithStock = productsData?.map(product => ({
+        ...product,
+        stock: 0,  // Default value for stock
+      })) || [];
+      
+      return productsWithStock;
     }
   });
 
@@ -43,7 +65,7 @@ export default function Products() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (product: any) => {
+    mutationFn: async (product: Omit<Product, 'id'>) => {
       const { error } = await supabase.from('products').insert(product);
       if (error) throw error;
     },
@@ -56,7 +78,7 @@ export default function Products() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, ...product }: any) => {
+    mutationFn: async ({ id, stock, ...product }: Product) => {
       const { error } = await supabase.from('products').update(product).eq('id', id);
       if (error) throw error;
     },
@@ -84,14 +106,45 @@ export default function Products() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
+    // Validate required fields
+    const name = formData.get('name') as string;
+    const sku = formData.get('sku') as string;
+    const priceStr = formData.get('price') as string;
+
+    if (!name || !sku || !priceStr) {
+      toast.error("Nama, SKU, dan harga harus diisi");
+      return;
+    }
+
+    // Validate price format
+    const price = parseFloat(priceStr);
+    if (isNaN(price) || price < 0) {
+      toast.error("Harga tidak valid");
+      return;
+    }
+
+    // Validate cost
+    const costStr = formData.get('cost') as string;
+    if (!costStr) {
+      toast.error("Harga modal harus diisi");
+      return;
+    }
+    const cost = parseFloat(costStr);
+    if (isNaN(cost) || cost < 0) {
+      toast.error("Harga modal tidak valid");
+      return;
+    }
+
     const product = {
-      name: formData.get('name'),
-      sku: formData.get('sku'),
-      description: formData.get('description'),
-      category_id: formData.get('category_id') || null,
-      price: parseFloat(formData.get('price') as string),
-      cost: parseFloat(formData.get('cost') as string),
-      image_url: formData.get('image_url') || null,
+      name,
+      sku,
+      description: formData.get('description') as string || null,
+      category_id: formData.get('category_id') as string || null,
+      cost,
+      price,
+      stock: 0, // Default stock ketika produk baru dibuat
+      image_url: formData.get('image_url') as string || null,
     };
 
     if (editingProduct) {
@@ -135,35 +188,76 @@ export default function Products() {
                   <Label htmlFor="description">Deskripsi</Label>
                   <Textarea id="description" name="description" defaultValue={editingProduct?.description} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category_id">Kategori</Label>
-                    <Select name="category_id" defaultValue={editingProduct?.category_id}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih kategori" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories?.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="image_url">URL Gambar</Label>
-                    <Input id="image_url" name="image_url" defaultValue={editingProduct?.image_url} />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category_id">Kategori</Label>
+                  <Select name="category_id" defaultValue={editingProduct?.category_id}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="cost">Harga Modal</Label>
-                    <Input id="cost" name="cost" type="number" step="0.01" defaultValue={editingProduct?.cost} required />
+                    <Input 
+                      id="cost" 
+                      name="cost" 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      defaultValue={editingProduct?.cost} 
+                      required 
+                      placeholder="Masukkan harga modal"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="price">Harga Jual</Label>
-                    <Input id="price" name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required />
+                    <Input 
+                      id="price" 
+                      name="price" 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      defaultValue={editingProduct?.price} 
+                      required 
+                      placeholder="Masukkan harga jual"
+                    />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="image_url">URL Gambar</Label>
+                  <Input 
+                    id="image_url" 
+                    name="image_url" 
+                    type="url"
+                    defaultValue={editingProduct?.image_url}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Masukkan URL gambar produk (opsional)
+                  </p>
+                </div>
+                {editingProduct && (
+                  <div className="space-y-2">
+                    <Label htmlFor="stock">Stok</Label>
+                    <Input 
+                      id="stock" 
+                      name="stock" 
+                      type="number" 
+                      min="0"
+                      defaultValue={editingProduct?.stock} 
+                      disabled 
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Stok diperbarui melalui halaman Warehouse
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditingProduct(null); }}>
                     Batal
